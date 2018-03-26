@@ -76,4 +76,44 @@ With data-Intensive applications, we seek to achieve the following:
   * RPC: remove procedure calls
     * Tries to make a request to a remote network serivce look like local procedure calls
     * Lots of flaws, since a network request behaves very differently from a local function call
-    
+    * Frequently used for the case of requests between services within same datacenter
+
+# PART 2
+## Distributed data
+* Vertical vs horizontal scaling
+* Horizontal scaling
+  * Data is distributed across multiple nodes in two common ways:
+    1. Replication: keep a copy of the same data on several different nodes
+    2. Partitioning: splitting the database into smaller subsets called partitions, which is then assigned to different nodes (sharding) 
+  
+# Chapter 5
+## Replication
+* Reasons to replicate data:
+  * Keep data geograpically close to users
+  * Fault tolerance
+  * Increase read throughput by having more machines that can serve reads
+* (In chapter 5, we assume each machine can hold a copy of the entire dataset)
+* Popular algorithms for replicating changes between nodes:
+  1. Single-leader: a replica is designated as leader
+    * All write requests are done by the leader, which also sends the data change to all its followers, as part of a replication log or change stream. Each follower processes the update. Reads can be done on any leader or follower, but writes are only accepted on the leader.
+      * Often asynchronous, ie. leader sends message to followers, but doesn't wait for response before reporting success to user
+      * Setting up new followers
+        * Take consistent snapshot of leader's database and copy to new follower node. Follower connects to leader and requests all data changes that have happened since snapshot was taken. When follower has processed backlog of the data changes, it has caught up, and can process new changes from leader as they happen.
+    * Follow failure: catch up recover
+      * Follower detects changes since it failed, connects to leader, updates all changes
+    * Leader failure: failover
+      * Election of new leader
+      * Can go wrong in several ways, due to mismatched data, conflicts between old vs new leader, discarding old leader writes, etc.
+    * Replication logs
+      1. Statement-based replication
+        * Because many edge cases, other replication methods are generally preferred
+      2. Write-ahead (WAL) log shipping
+        * Used by PostgreSQL
+      3. Logical (row-based) replication
+        * Logical log: a sequence of records describing writes to database tables at the granularity of a row
+       * Used by MySQL binlog
+    * Replication lag
+      
+  2. Multi-leader
+  3. Leaderless
+
