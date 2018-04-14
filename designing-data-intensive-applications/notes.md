@@ -113,7 +113,53 @@ With data-Intensive applications, we seek to achieve the following:
         * Logical log: a sequence of records describing writes to database tables at the granularity of a row
        * Used by MySQL binlog
     * Replication lag
-      
+      * Delay in replication until eventual consistency
+      * Read-after-write consistency: guarantees that if a user writes and reloads the page, they should see the update they just submitted
+        * Impl 1: always read own profile from leader, and other users' profiles from a follower
+        * Impl 2: client can remember timestamp of most recent write, and system serving reads for user ensures updates at least until that timestamp (otherwise let another replica handle read, or delay query until caught up)
+      * Cross-device read-after-write consistency: if user enters info on one device, they should be able to view the info on another device immediately
+      * Monotonic reads: if user makes several reads in sequence, they should not see time go backwards due to asynchronous updates
+        * Impl 1: each user reads their reads from same replica
+      * Consistent prefix reads: anyone reading a sequence of writes will see them in the same order
   2. Multi-leader
+    * Extensiion of single leader model, and allows multiple nodes to accept writes. Each leader is simultaneously a follower to another leader.
+    * Use cases
+      * Multi-datacenter operation: each datacenter has its own leader. Replication between datacenters is lead by each database leader. Has advantages in performance and reliability, but one big downside. The same data may be concurrently modified in two different datacenters, and write conflicts must be resolved. In addition, it may cause issues with features like autoincrementing keys, triggers, and integrity constraints. Multi-leader replication is often dangerous and should be avoided.
+      * Clients with offline operation: changes that are made offline are synced with a server when online again. With multiple devices, each device has a local database that acts as leader. The sync process between all devices for application is done via asynchronous multi-leader replication.
+      * Collaborative editing
+    * Handling write conflicts
+      * The biggest problem with multi-leader replication is that write conflicts can occur, which means that conflict resolution is required
+      * Conflict avoidance: preferred, since many implementations of multi-leader replication handle conflicts poorly. One strategy is to make sure requests from a particular user is always routed to and use the same datacenter leader for reading and writing. 
+      * Converging towards consistent state: 
+    * Multi-Leader Replication Topologies
+      * How writes are proprogated from one leader to another
+        * Circular: MySQL, bad if one node fails
+        * Star: bad if one node fails
+        * All-to-all: most general: bad if some network links faster than others (may cause misordering in write  replication). Use version vectors to order events correctly.
   3. Leaderless
-
+    * Dynamo, Riak, Cassandra, Voldemort
+    * Failover does not exist. Ie. if a portion of (w)rite/(n)nodes is successful, call that success. Then when client read from one replica, the request is also sent to several nodes in parallel, and newest value is returned.
+      * (w+r) > n, can expect to get up-to-date value when reading
+        * Reads/writes that follow this rule are called "quorum" reads and writes
+# Chapter 6
+## Partioning
+* Key-value partitioning
+  * Range partioning
+    * Hot spots
+  * Hash partitioning
+    * eg. Fowler– Noll–Vo function(Cassandra and MongoDB), MD5 (Voldemort)
+* Key-value partioning (with secondary index)
+  * Document based partitioning
+    * Each partition maintains its secondary indexes independently of others (local index). 
+    * Reading is scatter-gather since still need to send query to all partitions, then combine results. As such, read queries on secondary indexes can be expensive. 
+  * Term-based partitioning
+    * A global index is partitioned and becomes the secondary indexes. 
+    * Writes are now more complicated, since a write could affect multiple partitions (eg. each updating term is on a different node). Updates to the secondary indexes are often asychronous. 
+* Rebalancing partitions
+  * Strategies
+    * Example of bad strategy: change hash key to (hash mod N). This moves the keys around a lot and makes rebalancing expensive.
+    * Fixed number of nodes: create more partitions than there are nodes, with each node having approximately equal number of partitions (can be difficult to pick out "perfect" number if data size is highly variable). When adding new node, it can plucks existing partitions away from current nodes. When removing partition, it distributes its partitions amongst the current nodes. Size of partitions proportional to size of dataset.
+    * Dynamic partitioning (for key-range partitions): when partition exceeds configured size, split into two partitions. Number of partitions is proportional to size of dataset.
+    * Partition proportional to nodes: have a fixed number of partitions per node. Size of each partition grows as datasize increases, but number of nodes remain unchanged. When increase number of nodes, the partitions become smaller again.
+  * Request Routing
+    * Client can get forwarded to correct node to handle request, go through routing tier, or connect with node directly 
