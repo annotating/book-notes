@@ -141,6 +141,7 @@ With data-Intensive applications, we seek to achieve the following:
     * Failover does not exist. Ie. if a portion of (w)rite/(n)nodes is successful, call that success. Then when client read from one replica, the request is also sent to several nodes in parallel, and newest value is returned.
       * (w+r) > n, can expect to get up-to-date value when reading
         * Reads/writes that follow this rule are called "quorum" reads and writes
+
 # Chapter 6
 ## Partioning
 * Key-value partitioning
@@ -163,3 +164,35 @@ With data-Intensive applications, we seek to achieve the following:
     * Partition proportional to nodes: have a fixed number of partitions per node. Size of each partition grows as datasize increases, but number of nodes remain unchanged. When increase number of nodes, the partitions become smaller again.
   * Request Routing
     * Client can get forwarded to correct node to handle request, go through routing tier, or connect with node directly 
+
+# Chapter 7
+## Transactions
+* Transaction: one logical unit of several reads/writes. Atomic, either the entire thing succeds or fails
+* ACID: atomicity, consistency, isolation, durability
+* Transaction isolation
+  * Read commited: no dirty reads, no dirty writes (can only see/overwrite commited data)
+  * Preventing dirty writes: often implemented by using row-level locks
+  * Preventing dirty reads: for every object written, remember new and committed value. While transaction is ongoing, read old value. When transaction complete, read new value.
+* Nonrepeatable read or read skew
+  * Read at end of transaction is different than saw in previous query
+  * Eg. Alice has $1000 in two bank accounts. If she transfers $100 from account1 to account2, and she views the transaction as it is being processed, she may only see $900 ($100 has disappeared).
+  * Example of places where read skew is intolerable
+    * Backups: may end up with parts of backup containing older/newer versions of data
+    * Analytic queries and integrity checks: may return nonsensical queries if observing database at different times
+  * Solution is to use snapshot isolation
+    * Each transaction reads from consistent snapshot of database, ie. database data ending at start of transaction
+    * Implementation
+      * Write locks to prevent dirty writes
+      * Readers never block writers, writers never block readers
+      * Multiple version concurrency control (MVCC)
+    * Snapshot isoluation is also called serializable (Oracle), repeatable read (PostgreSQL/MySQL)
+* SELECT * FOR UPDATE : explicit row locking
+* Write skew
+* Serializable isolation : regarded as the strongest isolation level. Guarantees that even if transactions execute in parallel, end result is the same as if they had executed serially concurrency
+  * Implementataions
+    * Actual serial execution
+      * Doesn't scale well
+    * Two-phase locking 
+      * Doesn't perform well
+    * Optimistic concurrency control techniques
+      * Serializable snapshot isolation (SSI)
